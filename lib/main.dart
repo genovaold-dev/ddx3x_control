@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'features/home/home_page.dart';
 
 void main() {
   runApp(const Ddx3xApp());
@@ -23,21 +24,3 @@ class Ddx3xApp extends StatelessWidget {
   }
 }
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('DDX3X'),
-      ),
-      body: const Center(
-        child: Text(
-          'DDX3X Official App',
-          style: TextStyle(fontSize: 24),
-        ),
-      ),
-    );
-  }
-}
