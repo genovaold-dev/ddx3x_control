@@ -4,19 +4,24 @@ import 'package:webview_flutter/webview_flutter.dart';
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
-@override
-State<HomePage> createState() => _HomePageState();
+  @override
+  State<HomePage> createState() => _HomePageState();
 }
- 
+
 class _HomePageState extends State<HomePage> {
- late final WebViewController controller;
-@override
- void initState() {
+  late final WebViewController controller;
+
+  @override
+  void initState() {
     super.initState();
 
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadRequest(Uri.parse('https://www.ddx3x.it'));
+      ..setBackgroundColor(const Color(0x00000000))
+      ..enableZoom(true)
+      ..loadRequest(
+        Uri.parse('https://www.ddx3x.it'),
+      );
   }
 
   @override
