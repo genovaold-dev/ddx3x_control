@@ -122,36 +122,6 @@ class HomePage extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // DOCUMENTI
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.folder),
-                title: const Text('Documenti e materiali'),
-                subtitle: const Text(
-                  'Materiale informativo e risorse',
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {},
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // MODULI
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.assignment),
-                title: const Text('Moduli e questionari'),
-                subtitle: const Text(
-                  'Questionari e moduli dell’associazione',
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {},
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
             // SOCIAL
             Card(
               child: ListTile(
@@ -161,7 +131,9 @@ class HomePage extends StatelessWidget {
                   'Facebook e Instagram',
                 ),
                 trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {},
+                onTap: () {
+                  _showSocialMenu(context);
+                },
               ),
             ),
           ],
@@ -169,8 +141,84 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
-}
 
+  static void _showSocialMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Seguici sui social',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                ListTile(
+                  leading: const Icon(
+                    Icons.facebook,
+                    size: 32,
+                  ),
+                  title: const Text('Facebook'),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                  ),
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://www.facebook.com/AssociazioneDDX',
+                    );
+
+                    Navigator.pop(context);
+
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  },
+                ),
+
+                ListTile(
+                  leading: const Icon(
+                    Icons.camera_alt,
+                    size: 32,
+                  ),
+                  title: const Text('Instagram'),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                  ),
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://www.instagram.com/ddx3x_italia/',
+                    );
+
+                    Navigator.pop(context);
+
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
 
 // ============================================================
 // CENTRO NOTIFICHE
@@ -252,7 +300,7 @@ class NotificationsPage extends StatelessWidget {
                     SizedBox(height: 8),
                     Text(
                       'Le comunicazioni dell’associazione '
-                      'appariranno qui.',
+                          'appariranno qui.',
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -264,10 +312,12 @@ class NotificationsPage extends StatelessWidget {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: documents.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, __) =>
+            const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final data =
-                  documents[index].data() as Map<String, dynamic>;
+              documents[index].data()
+              as Map<String, dynamic>;
 
               final title =
                   data['title'] as String? ?? 'DDX3X';
@@ -276,13 +326,12 @@ class NotificationsPage extends StatelessWidget {
                   data['body'] as String? ?? '';
 
               final url =
-                  data['url'] as String?;
+              data['url'] as String?;
 
               final timestamp =
-                  data['createdAt'] as Timestamp?;
+              data['createdAt'] as Timestamp?;
 
-              final date =
-                  timestamp?.toDate();
+              final date = timestamp?.toDate();
 
               return Card(
                 child: ListTile(
@@ -297,15 +346,13 @@ class NotificationsPage extends StatelessWidget {
                     ),
                   ),
                   subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 6),
-
                       Text(body),
-
                       if (date != null) ...[
                         const SizedBox(height: 8),
-
                         Text(
                           _formatDate(date),
                           style: TextStyle(
@@ -317,28 +364,27 @@ class NotificationsPage extends StatelessWidget {
                     ],
                   ),
                   isThreeLine: true,
-
                   trailing:
-                      url != null && url.isNotEmpty
-                          ? const Icon(
-                              Icons.arrow_forward_ios,
-                            )
-                          : null,
-
+                  url != null && url.isNotEmpty
+                      ? const Icon(
+                    Icons.arrow_forward_ios,
+                  )
+                      : null,
                   onTap:
-                      url != null && url.isNotEmpty
-                          ? () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => WebsitePage(
-                                    title: title,
-                                    url: url,
-                                  ),
-                                ),
-                              );
-                            }
-                          : null,
+                  url != null && url.isNotEmpty
+                      ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            WebsitePage(
+                              title: title,
+                              url: url,
+                            ),
+                      ),
+                    );
+                  }
+                      : null,
                 ),
               );
             },
@@ -348,21 +394,28 @@ class NotificationsPage extends StatelessWidget {
     );
   }
 
-  // Visualizza l'orario italiano
+  // Converte l'orario Firestore nell'ora locale
   static String _formatDate(DateTime date) {
-    final italianDate = date.add(const Duration(hours: 2));
-     
-     final day = italianDate.day.toString().padLeft(2, '0');
-     final month = italianDate.month.toString().padLeft(2, '0');
-     final year = italianDate.year.toString();
+    final localDate = date.toLocal();
 
-     final hour = italianDate.hour.toString().padLeft(2, '0');
-     final minute = italianDate.minute.toString().padLeft(2, '0');
+    final day =
+    localDate.day.toString().padLeft(2, '0');
 
-     return '$day/$month/$year alle $hour:$minute';
+    final month =
+    localDate.month.toString().padLeft(2, '0');
+
+    final year =
+    localDate.year.toString();
+
+    final hour =
+    localDate.hour.toString().padLeft(2, '0');
+
+    final minute =
+    localDate.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year alle $hour:$minute';
   }
 }
-
 
 // ============================================================
 // WEBVIEW
@@ -379,7 +432,8 @@ class WebsitePage extends StatefulWidget {
   });
 
   @override
-  State<WebsitePage> createState() => _WebsitePageState();
+  State<WebsitePage> createState() =>
+      _WebsitePageState();
 }
 
 class _WebsitePageState extends State<WebsitePage> {
@@ -402,7 +456,7 @@ class _WebsitePageState extends State<WebsitePage> {
           onNavigationRequest:
               (NavigationRequest request) async {
             final uri =
-                Uri.tryParse(request.url);
+            Uri.tryParse(request.url);
 
             if (uri == null) {
               return NavigationDecision.prevent;
@@ -411,13 +465,13 @@ class _WebsitePageState extends State<WebsitePage> {
             // POSTA ELETTRONICA
             if (uri.scheme == 'mailto') {
               final canOpen =
-                  await canLaunchUrl(uri);
+              await canLaunchUrl(uri);
 
               if (canOpen) {
                 await launchUrl(
                   uri,
                   mode:
-                      LaunchMode.externalApplication,
+                  LaunchMode.externalApplication,
                 );
               }
 
@@ -427,13 +481,13 @@ class _WebsitePageState extends State<WebsitePage> {
             // TELEFONO
             if (uri.scheme == 'tel') {
               final canOpen =
-                  await canLaunchUrl(uri);
+              await canLaunchUrl(uri);
 
               if (canOpen) {
                 await launchUrl(
                   uri,
                   mode:
-                      LaunchMode.externalApplication,
+                  LaunchMode.externalApplication,
                 );
               }
 
@@ -451,13 +505,13 @@ class _WebsitePageState extends State<WebsitePage> {
             if (uri.scheme == 'https' ||
                 uri.scheme == 'http') {
               final canOpen =
-                  await canLaunchUrl(uri);
+              await canLaunchUrl(uri);
 
               if (canOpen) {
                 await launchUrl(
                   uri,
                   mode:
-                      LaunchMode.externalApplication,
+                  LaunchMode.externalApplication,
                 );
               }
 
