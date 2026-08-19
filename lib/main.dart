@@ -11,8 +11,6 @@ FlutterLocalNotificationsPlugin();
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-String? pendingNotificationUrl;
-
 const AndroidNotificationChannel notificationChannel =
 AndroidNotificationChannel(
   'ddx3x_notifications',
@@ -22,45 +20,6 @@ AndroidNotificationChannel(
   playSound: true,
 );
 
-void openNotificationUrl(String? url) {
-  if (url == null || url.isEmpty) {
-    return;
-  }
-
-  debugPrint('DDX3X - Apertura URL dalla notifica: $url');
-
-  final navigator = navigatorKey.currentState;
-
-  if (navigator == null) {
-    pendingNotificationUrl = url;
-    return;
-  }
-
-  navigator.push(
-    MaterialPageRoute(
-      builder: (_) => WebsitePage(
-        title: 'DDX3X',
-        url: url,
-      ),
-    ),
-  );
-}
-
-@pragma('vm:entry-point')
-void notificationResponseHandler(
-    NotificationResponse response,
-    ) {
-  final payload = response.payload;
-
-  debugPrint(
-    'DDX3X - Tap sulla notifica locale. Payload: $payload',
-  );
-
-  if (payload != null && payload.isNotEmpty) {
-    pendingNotificationUrl = payload;
-  }
-}
-
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(
     RemoteMessage message,
@@ -69,30 +28,43 @@ Future<void> firebaseMessagingBackgroundHandler(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  debugPrint('DDX3X - Notifica ricevuta in background');
-  debugPrint('Titolo: ${message.notification?.title}');
-  debugPrint('Testo: ${message.notification?.body}');
-  debugPrint('Dati: ${message.data}');
+  print('DDX3X - Notifica ricevuta in background');
+  print('Titolo: ${message.notification?.title}');
+  print('Testo: ${message.notification?.body}');
+  print('Dati: ${message.data}');
 
-  final title = message.notification?.title ?? 'DDX3X';
-  final body = message.notification?.body ?? '';
-  final url = message.data['url'] ?? '';
+  // IMPORTANTE:
+  // NON mostriamo qui una seconda notifica.
+  //
+  // Quando il messaggio contiene il campo "notification",
+  // Firebase/Android mostra automaticamente la notifica
+  // quando l'app è in background.
+}
 
-  await flutterLocalNotificationsPlugin.show(
-    message.hashCode,
-    title,
-    body,
-    const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'ddx3x_notifications',
-        'DDX3X Notifiche',
-        channelDescription: 'Notifiche dell’app DDX3X',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
+Future<void> _openNotificationLink(RemoteMessage message) async {
+  final url = message.data['url'];
+
+  if (url == null || url.toString().isEmpty) {
+    print('DDX3X - Nessun link nella notifica');
+    return;
+  }
+
+  print('DDX3X - Apertura link: $url');
+
+  final navigator = navigatorKey.currentState;
+
+  if (navigator == null) {
+    print('DDX3X - Navigator non disponibile');
+    return;
+  }
+
+  navigator.push(
+    MaterialPageRoute(
+      builder: (_) => WebsitePage(
+        title: message.notification?.title ?? 'DDX3X',
+        url: url.toString(),
       ),
     ),
-    payload: url,
   );
 }
 
@@ -112,7 +84,31 @@ Future<void> main() async {
 
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
-    onDidReceiveNotificationResponse: notificationResponseHandler,
+    onDidReceiveNotificationResponse: (NotificationResponse response) {
+      final payload = response.payload;
+
+      if (payload == null || payload.isEmpty) {
+        return;
+      }
+
+      print('DDX3X - Apertura notifica locale');
+      print('DDX3X - Link: $payload');
+
+      final navigator = navigatorKey.currentState;
+
+      if (navigator == null) {
+        return;
+      }
+
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => WebsitePage(
+            title: 'DDX3X',
+            url: payload,
+          ),
+        ),
+      );
+    },
   );
 
   await flutterLocalNotificationsPlugin
@@ -132,93 +128,80 @@ Future<void> main() async {
     sound: true,
   );
 
-  debugPrint(
+  print(
     'DDX3X - Permesso notifiche: ${settings.authorizationStatus}',
   );
 
   final token = await messaging.getToken();
 
-  debugPrint('DDX3X FCM TOKEN:');
-  debugPrint(token);
+  print('DDX3X FCM TOKEN:');
+  print(token);
 
   await messaging.subscribeToTopic('ddx3x_tutti');
 
-  debugPrint('DDX3X - Iscritto al topic: ddx3x_tutti');
+  print('DDX3X - Iscritto al topic: ddx3x_tutti');
 
-  FirebaseMessaging.onMessage.listen(
-        (RemoteMessage message) async {
-      debugPrint('DDX3X - Notifica ricevuta in primo piano');
-      debugPrint('Titolo: ${message.notification?.title}');
-      debugPrint('Testo: ${message.notification?.body}');
-      debugPrint('Dati: ${message.data}');
+  // ============================================================
+  // NOTIFICA CON APP IN PRIMO PIANO
+  // ============================================================
 
-      final title = message.notification?.title ?? 'DDX3X';
-      final body = message.notification?.body ?? '';
-      final url = message.data['url'] ?? '';
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    print('DDX3X - Notifica ricevuta in primo piano');
+    print('Titolo: ${message.notification?.title}');
+    print('Testo: ${message.notification?.body}');
+    print('Dati: ${message.data}');
 
-      await flutterLocalNotificationsPlugin.show(
-        message.hashCode,
-        title,
-        body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'ddx3x_notifications',
-            'DDX3X Notifiche',
-            channelDescription: 'Notifiche dell’app DDX3X',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-          ),
+    final title = message.notification?.title ?? 'DDX3X';
+    final body = message.notification?.body ?? '';
+    final url = message.data['url']?.toString();
+
+    await flutterLocalNotificationsPlugin.show(
+      message.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'ddx3x_notifications',
+          'DDX3X Notifiche',
+          channelDescription: 'Notifiche dell’app DDX3X',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
         ),
-        payload: url,
-      );
-    },
-  );
+      ),
+      payload: url,
+    );
+  });
+
+  // ============================================================
+  // NOTIFICA APERTA CON APP IN BACKGROUND
+  // ============================================================
 
   FirebaseMessaging.onMessageOpenedApp.listen(
         (RemoteMessage message) {
-      debugPrint('DDX3X - Notifica push aperta dall’utente');
-      debugPrint('Dati: ${message.data}');
+      print('DDX3X - Notifica aperta dall’utente');
+      print('Dati: ${message.data}');
 
-      final url = message.data['url'];
-
-      if (url != null && url.isNotEmpty) {
-        openNotificationUrl(url);
-      }
+      _openNotificationLink(message);
     },
   );
+
+  // ============================================================
+  // NOTIFICA APERTA CON APP COMPLETAMENTE CHIUSA
+  // ============================================================
 
   final initialMessage = await messaging.getInitialMessage();
 
   if (initialMessage != null) {
-    debugPrint(
-      'DDX3X - App aperta tramite notifica push',
-    );
+    print('DDX3X - App aperta tramite notifica');
+    print('Dati: ${initialMessage.data}');
 
-    debugPrint(
-      'Dati notifica: ${initialMessage.data}',
-    );
-
-    final url = initialMessage.data['url'];
-
-    if (url != null && url.isNotEmpty) {
-      pendingNotificationUrl = url;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openNotificationLink(initialMessage);
+    });
   }
 
   runApp(const Ddx3xApp());
-
-  WidgetsBinding.instance.addPostFrameCallback(
-        (_) {
-      if (pendingNotificationUrl != null) {
-        final url = pendingNotificationUrl;
-
-        pendingNotificationUrl = null;
-
-        openNotificationUrl(url);
-      }
-    },
-  );
 }
 
 class Ddx3xApp extends StatelessWidget {
