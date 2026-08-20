@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -267,7 +266,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   Future<void> _loadNotificationSettings() async {
     final preferences =
-    await SharedPreferences.getInstance();
+        await SharedPreferences.getInstance();
 
     final savedDate = preferences.getString(
       'ddx3x_installation_date',
@@ -288,7 +287,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     final deletedIds =
-    preferences.getStringList(
+        preferences.getStringList(
       'ddx3x_deleted_notification_ids',
     );
 
@@ -302,30 +301,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  Future<void> _deleteNotification(
-      String notificationId,
-      ) async {
-    final preferences =
-    await SharedPreferences.getInstance();
-
-    _deletedNotificationIds.add(
-      notificationId,
-    );
-
-    await preferences.setStringList(
-      'ddx3x_deleted_notification_ids',
-      _deletedNotificationIds.toList(),
-    );
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_loadingDate ||
-        _installationDate == null) {
+    if (_loadingDate) {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Notifiche'),
@@ -340,301 +318,44 @@ class _NotificationsPageState extends State<NotificationsPage> {
       appBar: AppBar(
         title: const Text('Notifiche'),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('notifications')
-            .where(
-          'createdAt',
-          isGreaterThanOrEqualTo:
-          Timestamp.fromDate(
-            _installationDate!,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.notifications_none,
+                size: 70,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Notifiche',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Le notifiche push dell’associazione '
+                'verranno ricevute direttamente sul dispositivo.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Il centro comunicazioni è temporaneamente '
+                'in fase di aggiornamento.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                ),
+              ),
+            ],
           ),
-        )
-            .orderBy(
-          'createdAt',
-          descending: true,
-        )
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding:
-                const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize:
-                  MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 50,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Impossibile caricare le notifiche.',
-                      textAlign:
-                      TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight:
-                        FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      snapshot.error
-                          .toString(),
-                      textAlign:
-                      TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final documents =
-              snapshot.data?.docs ?? [];
-
-          final visibleDocuments =
-          documents.where((document) {
-            return !_deletedNotificationIds
-                .contains(document.id);
-          }).toList();
-
-          if (visibleDocuments.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding:
-                EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize:
-                  MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.notifications_none,
-                      size: 70,
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Nessuna comunicazione',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight:
-                        FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Le nuove comunicazioni '
-                          'dell’associazione '
-                          'appariranno qui.',
-                      textAlign:
-                      TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return ListView.separated(
-            padding:
-            const EdgeInsets.all(16),
-            itemCount:
-            visibleDocuments.length,
-            separatorBuilder:
-                (_, __) =>
-            const SizedBox(
-              height: 10,
-            ),
-            itemBuilder:
-                (context, index) {
-              final document =
-              visibleDocuments[index];
-
-              final data =
-              document.data()
-              as Map<String, dynamic>;
-
-              final notificationId =
-                  document.id;
-
-              final title =
-                  data['title']
-                  as String? ??
-                      'DDX3X';
-
-              final body =
-                  data['body']
-                  as String? ??
-                      '';
-
-              final url =
-              data['url'] as String?;
-
-              final timestamp =
-              data['createdAt']
-              as Timestamp?;
-
-              final date =
-              timestamp?.toDate();
-
-              return Card(
-                child: ListTile(
-                  leading:
-                  const Icon(
-                    Icons.notifications,
-                    size: 30,
-                  ),
-
-                  title: Text(
-                    title,
-                    style:
-                    const TextStyle(
-                      fontWeight:
-                      FontWeight.bold,
-                    ),
-                  ),
-
-                  subtitle:
-                  Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                    children: [
-                      const SizedBox(
-                        height: 6,
-                      ),
-                      Text(body),
-                      if (date != null) ...[
-                        const SizedBox(
-                          height: 8,
-                        ),
-                        Text(
-                          _formatDate(
-                            date,
-                          ),
-                          style:
-                          TextStyle(
-                            fontSize: 12,
-                            color: Colors
-                                .grey
-                                .shade600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-
-                  isThreeLine: true,
-
-                  trailing:
-                  Row(
-                    mainAxisSize:
-                    MainAxisSize.min,
-                    children: [
-                      if (url != null &&
-                          url.isNotEmpty)
-                        IconButton(
-                          icon:
-                          const Icon(
-                            Icons
-                                .arrow_forward_ios,
-                            size: 18,
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    WebsitePage(
-                                      title:
-                                      title,
-                                      url: url,
-                                    ),
-                              ),
-                            );
-                          },
-                        ),
-
-                      IconButton(
-                        icon:
-                        const Icon(
-                          Icons.delete_outline,
-                        ),
-                        tooltip:
-                        'Cancella notifica',
-                        onPressed: () {
-                          _deleteNotification(
-                            notificationId,
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-
-                  onTap:
-                  url != null &&
-                      url.isNotEmpty
-                      ? () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder:
-                            (_) =>
-                            WebsitePage(
-                              title:
-                              title,
-                              url: url,
-                            ),
-                      ),
-                    );
-                  }
-                      : null,
-                ),
-              );
-            },
-          );
-        },
+        ),
       ),
     );
-  }
-
-  static String _formatDate(
-      DateTime date,
-      ) {
-    final localDate =
-    date.toLocal();
-
-    final day = localDate.day
-        .toString()
-        .padLeft(2, '0');
-
-    final month = localDate.month
-        .toString()
-        .padLeft(2, '0');
-
-    final year =
-    localDate.year.toString();
-
-    final hour = localDate.hour
-        .toString()
-        .padLeft(2, '0');
-
-    final minute = localDate.minute
-        .toString()
-        .padLeft(2, '0');
-
-    return '$day/$month/$year alle '
-        '$hour:$minute';
   }
 }
 
@@ -675,85 +396,65 @@ class _WebsitePageState extends State<WebsitePage> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest:
-              (NavigationRequest
-          request) async {
-            final uri =
-            Uri.tryParse(
+              (NavigationRequest request) async {
+            final uri = Uri.tryParse(
               request.url,
             );
 
             if (uri == null) {
-              return NavigationDecision
-                  .prevent;
+              return NavigationDecision.prevent;
             }
 
-            if (uri.scheme ==
-                'mailto') {
+            if (uri.scheme == 'mailto') {
               final canOpen =
-              await canLaunchUrl(
-                uri,
-              );
+                  await canLaunchUrl(uri);
 
               if (canOpen) {
                 await launchUrl(
                   uri,
-                  mode: LaunchMode
-                      .externalApplication,
+                  mode: LaunchMode.externalApplication,
                 );
               }
 
-              return NavigationDecision
-                  .prevent;
+              return NavigationDecision.prevent;
             }
 
             if (uri.scheme == 'tel') {
               final canOpen =
-              await canLaunchUrl(
-                uri,
-              );
+                  await canLaunchUrl(uri);
 
               if (canOpen) {
                 await launchUrl(
                   uri,
-                  mode: LaunchMode
-                      .externalApplication,
+                  mode: LaunchMode.externalApplication,
                 );
               }
 
-              return NavigationDecision
-                  .prevent;
+              return NavigationDecision.prevent;
             }
 
             if (uri.scheme == 'https' &&
-                (uri.host ==
-                    'www.ddx3x.it' ||
-                    uri.host ==
-                        'ddx3x.it')) {
-              return NavigationDecision
-                  .navigate;
+                (uri.host == 'www.ddx3x.it' ||
+                    uri.host == 'ddx3x.it')) {
+              return NavigationDecision.navigate;
             }
 
             if (uri.scheme == 'https' ||
                 uri.scheme == 'http') {
               final canOpen =
-              await canLaunchUrl(
-                uri,
-              );
+                  await canLaunchUrl(uri);
 
               if (canOpen) {
                 await launchUrl(
                   uri,
-                  mode: LaunchMode
-                      .externalApplication,
+                  mode: LaunchMode.externalApplication,
                 );
               }
 
-              return NavigationDecision
-                  .prevent;
+              return NavigationDecision.prevent;
             }
 
-            return NavigationDecision
-                .prevent;
+            return NavigationDecision.prevent;
           },
         ),
       )
