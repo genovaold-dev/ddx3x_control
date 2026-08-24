@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "188371754278",
+    "project_id": "ddx3x-a9977",
+    "storage_bucket": "ddx3x-a9977.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:188371754278:android:f45e85020bf33a6a8275e7",
+        "android_client_info": {
+          "package_name": "com.example.ddx3xControl"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmAEgxvgPx2NO7kdgbywhIjnsAGdetAjM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:188371754278:android:d6822fd4ccace0108275e7",
+        "android_client_info": {
+          "package_name": "com.example.ddx3x_control"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmAEgxvgPx2NO7kdgbywhIjnsAGdetAjM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
