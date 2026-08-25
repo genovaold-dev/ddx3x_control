@@ -27,18 +27,42 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Check certificate secret
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+        run: |
+          CERT_LENGTH=$(printf '%s' "$IOS_CERTIFICATE_BASE64" | wc -c | tr -d ' ')
+          echo "IOS_CERTIFICATE_BASE64 length: $CERT_LENGTH"
+
+          if [ "$CERT_LENGTH" -eq 0 ]; then
+            echo "ERRORE: IOS_CERTIFICATE_BASE64 è vuoto."
+            exit 1
+          fi
+
       - name: Decode signing certificate
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
         run: |
-          echo "$IOS_CERTIFICATE_BASE64" | base64 -D > "$RUNNER_TEMP/ddx3x_distribution.p12"
+          printf '%s' "$IOS_CERTIFICATE_BASE64" \
+            | sed '/BEGIN CERTIFICATE/d; /END CERTIFICATE/d' \
+            | tr -d '\r\n ' \
+            | base64 -D \
+            > "$RUNNER_TEMP/ddx3x_distribution.p12"
+
+          echo "Certificato decodificato."
 
       - name: Decode provisioning profile
         env:
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/ddx3x.mobileprovision"
+
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" \
+            | tr -d '\r\n ' \
+            | base64 -D \
+            > "$RUNNER_TEMP/ddx3x.mobileprovision"
+
+          echo "Provisioning profile decodificato."
 
       - name: Install signing certificate
         env:
@@ -69,8 +93,13 @@ jobs:
         run: |
           PROFILE_PATH="$RUNNER_TEMP/ddx3x.mobileprovision"
 
-          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
-          NAME=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
+          UUID=$(/usr/libexec/PlistBuddy \
+            -c "Print UUID" \
+            /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
+
+          NAME=$(/usr/libexec/PlistBuddy \
+            -c "Print Name" \
+            /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
 
           echo "Provisioning Profile:"
           echo "Name: $NAME"
@@ -90,7 +119,6 @@ jobs:
             -scheme Runner \
             -configuration Release \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
-            -allowProvisioningUpdates \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=5DW4D2TY84 \
             CODE_SIGN_IDENTITY="Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)" \
