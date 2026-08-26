@@ -1,10 +1,7 @@
-name: Build iOS IPA
+name: Build Signed iOS IPA
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build-ios:
@@ -12,107 +9,44 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2'
           channel: stable
-          cache: true
 
-      - name: Flutter version
-        run: flutter --version
-
-      - name: Get dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Install Apple certificate and provisioning profile
-        env:
-          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      - name: Decode certificate
         run: |
-          CERTIFICATE_PATH="$RUNNER_TEMP/ddx3x_distribution.p12"
-          PROFILE_PATH="$RUNNER_TEMP/ddx3x.mobileprovision"
-          KEYCHAIN_PATH="$RUNNER_TEMP/ddx3x-signing.keychain-db"
-          KEYCHAIN_PASSWORD="github-actions"
+          echo "$IOS_CERTIFICATE_P12" | base64 --decode > certificate.p12
 
-          echo -n "$IOS_CERTIFICATE_BASE64" \
-            | base64 --decode -o "$CERTIFICATE_PATH"
-
-          echo -n "$IOS_PROVISIONING_PROFILE_BASE64" \
-            | base64 --decode -o "$PROFILE_PATH"
-
-          security create-keychain \
-            -p "$KEYCHAIN_PASSWORD" \
-            "$KEYCHAIN_PATH"
-
-          security set-keychain-settings \
-            -lut 21600 \
-            "$KEYCHAIN_PATH"
-
-          security unlock-keychain \
-            -p "$KEYCHAIN_PASSWORD" \
-            "$KEYCHAIN_PATH"
-
-          security import \
-            "$CERTIFICATE_PATH" \
-            -P "$IOS_CERTIFICATE_PASSWORD" \
-            -A \
-            -t cert \
-            -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-
-          security set-key-partition-list \
-            -S apple-tool:,apple: \
-            -k "$KEYCHAIN_PASSWORD" \
-            "$KEYCHAIN_PATH"
-
-          security list-keychain \
-            -d user \
-            -s "$KEYCHAIN_PATH"
-
-          mkdir -p \
-            "$HOME/Library/MobileDevice/Provisioning Profiles"
-
-          cp \
-            "$PROFILE_PATH" \
-            "$HOME/Library/MobileDevice/Provisioning Profiles/ddx3x.mobileprovision"
-
-      - name: Create ExportOptions.plist
+      - name: Decode provisioning profile
         run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
+          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > profile.mobileprovision
 
-              <key>signingStyle</key>
-              <string>manual</string>
-
-              <key>teamID</key>
-              <string>5DW4D2TY84</string>
-
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.example.ddx3xControl</key>
-                  <string>DDX3X_AppStore_Profile</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
-
-      - name: Build IPA
+      - name: Install certificate
         run: |
-          flutter build ipa \
-            --release \
-            --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+          security create-keychain -p "" build.keychain
+          security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security unlock-keychain -p "" build.keychain
+
+      - name: Install provisioning profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build iOS archive
+        run: |
+          flutter build ipa --release \
+            --export-options-plist=ios/ExportOptions.plist
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ddx3x-control-ipa
+          name: ddx3x-control-signed-ipa
           path: build/ios/ipa/*.ipa
+
