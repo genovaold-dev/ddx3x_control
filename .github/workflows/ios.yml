@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: macos-14
 
     steps:
       - name: Checkout repository
@@ -37,7 +37,6 @@ jobs:
           fi
 
           printf '%s' "$IOS_CERTIFICATE_BASE64" \
-            | sed '/BEGIN CERTIFICATE/ d; /END CERTIFICATE/ d' \
             | tr -d '\r\n ' \
             | base64 --decode \
             > "$RUNNER_TEMP/ddx3x_distribution.p12"
@@ -54,7 +53,6 @@ jobs:
           fi
 
           printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" \
-            | sed '/BEGIN CERTIFICATE/ d; /END CERTIFICATE/ d' \
             | tr -d '\r\n ' \
             | base64 --decode \
             > "$RUNNER_TEMP/ddx3x.mobileprovision"
@@ -105,8 +103,7 @@ jobs:
         run: |
           PROFILE_PATH="$RUNNER_TEMP/ddx3x.mobileprovision"
 
-          mkdir -p \
-            "$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
 
           security cms \
             -D \
@@ -151,123 +148,11 @@ jobs:
         run: |
           flutter build ios --release --no-codesign
 
-      - name: Configure Runner signing and disable Pods signing
+      - name: Disable Pods signing
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
-
-          # ============================================================
-          # RUNNER
-          # ============================================================
-
-          runner_path = Path("ios/Runner.xcodeproj/project.pbxproj")
-
-          if not runner_path.exists():
-              print("ERRORE: Runner.xcodeproj non trovato.")
-              raise SystemExit(1)
-
-          runner_text = runner_path.read_text()
-
-          # Trova il PBXNativeTarget di Runner.
-          native_target = re.search(
-              r'([A-F0-9]+) /\* Runner \*/ = \{\s*'
-              r'isa = PBXNativeTarget;.*?'
-              r'buildConfigurationList = ([A-F0-9]+).*?'
-              r'name = Runner;',
-              runner_text,
-              re.S
-          )
-
-          if not native_target:
-              print("ERRORE: target Runner non trovato.")
-              raise SystemExit(1)
-
-          config_list_id = native_target.group(2)
-
-          # Trova la PBXConfigurationList usata dal target Runner.
-          config_list = re.search(
-              rf'{config_list_id} /\* Build configuration list for PBXNativeTarget "Runner" \*/ = \{{'
-              r'.*?buildConfigurations = \((.*?)\);',
-              runner_text,
-              re.S
-          )
-
-          if not config_list:
-              print("ERRORE: configurazioni del target Runner non trovate.")
-              raise SystemExit(1)
-
-          config_ids = re.findall(
-              r'([A-F0-9]+) /\* (?:Debug|Release|Profile) \*/',
-              config_list.group(1)
-          )
-
-          if not config_ids:
-              print("ERRORE: ID configurazioni Runner non trovati.")
-              raise SystemExit(1)
-
-          # Modifica esclusivamente le configurazioni del target Runner.
-          for config_id in config_ids:
-              pattern = rf'({config_id} /\* (?:Debug|Release|Profile) \*/ = \{{.*?buildSettings = \{{)(.*?)(\n\s*\}};.*?\n\s*\}};)'
-
-              match = re.search(pattern, runner_text, re.S)
-
-              if not match:
-                  print(f"ATTENZIONE: configurazione {config_id} non modificata.")
-                  continue
-
-              settings = match.group(2)
-
-              def set_setting(settings, key, value):
-                  pattern = rf'^\s*{re.escape(key)}\s*=.*?;\s*$'
-                  replacement = f'\t\t\t\t{key} = {value};'
-
-                  if re.search(pattern, settings, re.M):
-                      return re.sub(pattern, replacement, settings, flags=re.M)
-
-                  return settings + "\n" + replacement
-
-              settings = set_setting(
-                  settings,
-                  "DEVELOPMENT_TEAM",
-                  "5DW4D2TY84"
-              )
-
-              settings = set_setting(
-                  settings,
-                  "CODE_SIGN_STYLE",
-                  "Manual"
-              )
-
-              settings = set_setting(
-                  settings,
-                  "CODE_SIGN_IDENTITY",
-                  '"Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)"'
-              )
-
-              settings = set_setting(
-                  settings,
-                  "PROVISIONING_PROFILE_SPECIFIER",
-                  '"DDX3X_AppStore_Profile"'
-              )
-
-              runner_text = (
-                  runner_text[:match.start(2)]
-                  + settings
-                  + runner_text[match.end(2):]
-              )
-
-          runner_path.write_text(runner_text)
-
-          print("Runner configurato:")
-          print("  DEVELOPMENT_TEAM = 5DW4D2TY84")
-          print("  CODE_SIGN_STYLE = Manual")
-          print("  CODE_SIGN_IDENTITY = Apple Distribution")
-          print("  PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile")
-
-          # ============================================================
-          # PODS
-          # ============================================================
 
           pods_path = Path("ios/Pods/Pods.xcodeproj/project.pbxproj")
 
@@ -277,18 +162,9 @@ jobs:
 
           pods_text = pods_path.read_text()
 
-          # I Pods non devono essere firmati con il provisioning
-          # profile dell'app Runner.
           pods_text = re.sub(
               r'^\s*PROVISIONING_PROFILE_SPECIFIER\s*=.*?;\s*$',
               '\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "";',
-              pods_text,
-              flags=re.M
-          )
-
-          pods_text = re.sub(
-              r'^\s*CODE_SIGN_STYLE\s*=.*?;\s*$',
-              '\t\t\t\tCODE_SIGN_STYLE = Automatic;',
               pods_text,
               flags=re.M
           )
@@ -307,39 +183,9 @@ jobs:
               flags=re.M
           )
 
-          # Se queste proprietà non esistono, vengono aggiunte alle
-          # configurazioni dei Pods.
-          def ensure_setting(text, key, value):
-              if re.search(
-                  rf'^\s*{re.escape(key)}\s*=',
-                  text,
-                  re.M
-              ):
-                  return text
-
-              return text.replace(
-                  "buildSettings = {",
-                  "buildSettings = {\n\t\t\t\t"
-                  f"{key} = {value};",
-                  1
-              )
-
-          pods_text = ensure_setting(
-              pods_text,
-              "CODE_SIGNING_ALLOWED",
-              "NO"
-          )
-
-          pods_text = ensure_setting(
-              pods_text,
-              "CODE_SIGNING_REQUIRED",
-              "NO"
-          )
-
           pods_path.write_text(pods_text)
 
-          print("Pods configurati senza firma e senza provisioning profile.")
-          print("GoogleDataTransport e gli altri Pods non riceveranno il profilo dell'app.")
+          print("Pods configurati senza firma.")
 
       - name: Verify signing configuration
         run: |
@@ -354,7 +200,7 @@ jobs:
           echo "===== PODS SIGNING ====="
 
           grep -n \
-            -E "CODE_SIGNING_ALLOWED|CODE_SIGNING_REQUIRED|CODE_SIGN_STYLE|PROVISIONING_PROFILE_SPECIFIER" \
+            -E "CODE_SIGNING_ALLOWED|CODE_SIGNING_REQUIRED|PROVISIONING_PROFILE_SPECIFIER" \
             ios/Pods/Pods.xcodeproj/project.pbxproj \
             || true
 
@@ -407,3 +253,4 @@ jobs:
         with:
           name: ddx3x-control-ipa
           path: ddx3x_control.ipa
+    
