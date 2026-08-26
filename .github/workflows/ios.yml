@@ -27,42 +27,25 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Install Codemagic CLI tools
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install codemagic-cli-tools
-
-      - name: Decode signing certificate
+      - name: Install Apple certificate and provisioning profile
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
-        run: |
-          printf '%s' "$IOS_CERTIFICATE_BASE64" \
-            | sed '/BEGIN CERTIFICATE/ d; /END CERTIFICATE/ d' \
-            | tr -d '\r\n ' \
-            | base64 --decode \
-            > "$RUNNER_TEMP/ddx3x_distribution.p12"
-
-          test -s "$RUNNER_TEMP/ddx3x_distribution.p12"
-
-      - name: Decode provisioning profile
-        env:
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
-          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" \
-            | tr -d '\r\n ' \
-            | base64 --decode \
-            > "$RUNNER_TEMP/ddx3x.mobileprovision"
-
-          test -s "$RUNNER_TEMP/ddx3x.mobileprovision"
-
-      - name: Install Apple certificate
-        env:
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/ddx3x_distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/ddx3x.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/ddx3x-signing.keychain-db"
+          KEYCHAIN_PASSWORD="github-actions"
+
+          echo -n "$IOS_CERTIFICATE_BASE64" \
+            | base64 --decode -o "$CERTIFICATE_PATH"
+
+          echo -n "$IOS_PROVISIONING_PROFILE_BASE64" \
+            | base64 --decode -o "$PROFILE_PATH"
 
           security create-keychain \
-            -p "github-actions" \
+            -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
           security set-keychain-settings \
@@ -70,11 +53,11 @@ jobs:
             "$KEYCHAIN_PATH"
 
           security unlock-keychain \
-            -p "github-actions" \
+            -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
           security import \
-            "$RUNNER_TEMP/ddx3x_distribution.p12" \
+            "$CERTIFICATE_PATH" \
             -P "$IOS_CERTIFICATE_PASSWORD" \
             -A \
             -t cert \
@@ -82,71 +65,53 @@ jobs:
             -k "$KEYCHAIN_PATH"
 
           security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s \
-            -k "github-actions" \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
           security list-keychain \
             -d user \
             -s "$KEYCHAIN_PATH"
 
-      - name: Install provisioning profile
-        run: |
-          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-
-          mkdir -p "$PROFILE_DIR"
-
-          security cms \
-            -D \
-            -i "$RUNNER_TEMP/ddx3x.mobileprovision" \
-            > "$RUNNER_TEMP/profile.plist"
-
-          UUID=$(
-            /usr/libexec/PlistBuddy \
-            -c "Print UUID" \
-            "$RUNNER_TEMP/profile.plist"
-          )
-
-          NAME=$(
-            /usr/libexec/PlistBuddy \
-            -c "Print Name" \
-            "$RUNNER_TEMP/profile.plist"
-          )
-
-          TEAM=$(
-            /usr/libexec/PlistBuddy \
-            -c "Print TeamIdentifier:0" \
-            "$RUNNER_TEMP/profile.plist"
-          )
-
-          APP_ID=$(
-            /usr/libexec/PlistBuddy \
-            -c "Print Entitlements:application-identifier" \
-            "$RUNNER_TEMP/profile.plist"
-          )
-
-          echo "Provisioning Profile:"
-          echo "Name: $NAME"
-          echo "UUID: $UUID"
-          echo "Team: $TEAM"
-          echo "Application Identifier: $APP_ID"
+          mkdir -p \
+            "$HOME/Library/MobileDevice/Provisioning Profiles"
 
           cp \
-            "$RUNNER_TEMP/ddx3x.mobileprovision" \
-            "$PROFILE_DIR/$UUID.mobileprovision"
+            "$PROFILE_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/ddx3x.mobileprovision"
 
-      - name: Configure Xcode signing profiles
+      - name: Create ExportOptions.plist
         run: |
-          xcode-project use-profiles
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
 
-      - name: Build signed IPA
+              <key>signingStyle</key>
+              <string>manual</string>
+
+              <key>teamID</key>
+              <string>5DW4D2TY84</string>
+
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.example.ddx3xControl</key>
+                  <string>DDX3X_AppStore_Profile</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Build IPA
         run: |
           flutter build ipa \
             --release \
-            --export-options-plist="$HOME/export_options.plist"
+            --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
 
-      - name: Upload signed IPA
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: ddx3x-control-ipa
