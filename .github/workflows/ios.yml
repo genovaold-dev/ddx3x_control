@@ -31,16 +31,13 @@ jobs:
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
         run: |
-          echo "$IOS_CERTIFICATE_BASE64" | base64 -D > "$RUNNER_TEMP/ddx3x_distribution.p12"
-
-          echo "Verifica certificato PKCS#12:"
-          file "$RUNNER_TEMP/ddx3x_distribution.p12"
+          echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/ddx3x_distribution.p12"
 
       - name: Decode provisioning profile
         env:
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
-          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -D > "$RUNNER_TEMP/ddx3x.mobileprovision"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/ddx3x.mobileprovision"
 
       - name: Install signing certificate
         env:
@@ -77,12 +74,10 @@ jobs:
 
           UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$RUNNER_TEMP/profile.plist")
           NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$RUNNER_TEMP/profile.plist")
-          APP_ID=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" "$RUNNER_TEMP/profile.plist")
 
           echo "Provisioning Profile:"
           echo "Name: $NAME"
           echo "UUID: $UUID"
-          echo "Application Identifier: $APP_ID"
 
           cp "$PROFILE_PATH" \
             "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
@@ -90,46 +85,6 @@ jobs:
       - name: Prepare Flutter iOS project
         run: |
           flutter build ios --release --no-codesign
-
-      - name: Configure Runner signing
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("ios/Runner.xcodeproj/project.pbxproj")
-
-          if not path.exists():
-              print("ERRORE: Runner.xcodeproj non trovato.")
-              raise SystemExit(1)
-
-          text = path.read_text()
-
-          text = text.replace(
-              "CODE_SIGN_STYLE = Automatic;",
-              "CODE_SIGN_STYLE = Manual;"
-          )
-
-          text = text.replace(
-              "DEVELOPMENT_TEAM = 5DW4D2TY84;",
-              "DEVELOPMENT_TEAM = 5DW4D2TY84;"
-          )
-
-          if "CODE_SIGN_IDENTITY = \"Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)\";" not in text:
-              text = text.replace(
-                  "CODE_SIGN_STYLE = Manual;",
-                  "CODE_SIGN_STYLE = Manual;\n\t\t\t\tCODE_SIGN_IDENTITY = \"Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)\";"
-              )
-
-          if "PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;" not in text:
-              text = text.replace(
-                  "DEVELOPMENT_TEAM = 5DW4D2TY84;",
-                  "DEVELOPMENT_TEAM = 5DW4D2TY84;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;"
-              )
-
-          path.write_text(text)
-
-          print("Runner configurato per firma manuale.")
-          PY
 
       - name: Configure Pods signing
         run: |
@@ -144,24 +99,19 @@ jobs:
 
           text = path.read_text()
 
-          text = text.replace(
-              "CODE_SIGN_STYLE = Manual;",
-              "CODE_SIGN_STYLE = Automatic;"
-          )
-
+          # I Pods non devono ricevere il provisioning profile dell'app.
           text = text.replace(
               "PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;",
               "PROVISIONING_PROFILE_SPECIFIER = \"\";"
           )
 
           text = text.replace(
-              "DEVELOPMENT_TEAM = 5DW4D2TY84;",
-              "DEVELOPMENT_TEAM = \"\";"
+              "PROVISIONING_PROFILE_SPECIFIER = \"DDX3X_AppStore_Profile\";",
+              "PROVISIONING_PROFILE_SPECIFIER = \"\";"
           )
 
+          print("Configurazione Pods modificata: nessun provisioning profile per i Pods.")
           path.write_text(text)
-
-          print("Pods configurati senza provisioning profile.")
           PY
 
       - name: Build signed iOS archive
@@ -171,6 +121,10 @@ jobs:
             -scheme Runner \
             -configuration Release \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=5DW4D2TY84 \
+            CODE_SIGN_IDENTITY="Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)" \
+            PROVISIONING_PROFILE_SPECIFIER="DDX3X_AppStore_Profile" \
             archive
 
       - name: Create signed IPA
