@@ -1,0 +1,409 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.2'
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Decode signing certificate
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+        run: |
+          if [ -z "$IOS_CERTIFICATE_BASE64" ]; then
+            echo "ERRORE: IOS_CERTIFICATE_BASE64 è vuoto."
+            exit 1
+          fi
+
+          printf '%s' "$IOS_CERTIFICATE_BASE64" \
+            | sed '/BEGIN CERTIFICATE/ d; /END CERTIFICATE/ d' \
+            | tr -d '\r\n ' \
+            | base64 --decode \
+            > "$RUNNER_TEMP/ddx3x_distribution.p12"
+
+          echo "Certificato .p12 decodificato correttamente."
+
+      - name: Decode provisioning profile
+        env:
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -z "$IOS_PROVISIONING_PROFILE_BASE64" ]; then
+            echo "ERRORE: IOS_PROVISIONING_PROFILE_BASE64 è vuoto."
+            exit 1
+          fi
+
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" \
+            | sed '/BEGIN CERTIFICATE/ d; /END CERTIFICATE/ d' \
+            | tr -d '\r\n ' \
+            | base64 --decode \
+            > "$RUNNER_TEMP/ddx3x.mobileprovision"
+
+          echo "Provisioning profile decodificato correttamente."
+
+      - name: Install signing certificate
+        env:
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/ddx3x-signing.keychain-db"
+
+          security create-keychain \
+            -p "github-actions" \
+            "$KEYCHAIN_PATH"
+
+          security set-keychain-settings \
+            -lut 21600 \
+            "$KEYCHAIN_PATH"
+
+          security unlock-keychain \
+            -p "github-actions" \
+            "$KEYCHAIN_PATH"
+
+          security import \
+            "$RUNNER_TEMP/ddx3x_distribution.p12" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$IOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+
+          security list-keychain \
+            -d user \
+            -s "$KEYCHAIN_PATH"
+
+          security default-keychain \
+            -s "$KEYCHAIN_PATH"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "github-actions" \
+            "$KEYCHAIN_PATH"
+
+          echo "Certificato installato nel keychain."
+
+      - name: Install provisioning profile
+        run: |
+          PROFILE_PATH="$RUNNER_TEMP/ddx3x.mobileprovision"
+
+          mkdir -p \
+            "$HOME/Library/MobileDevice/Provisioning Profiles"
+
+          security cms \
+            -D \
+            -i "$PROFILE_PATH" \
+            > "$RUNNER_TEMP/profile.plist"
+
+          UUID=$(
+            /usr/libexec/PlistBuddy \
+            -c "Print UUID" \
+            "$RUNNER_TEMP/profile.plist"
+          )
+
+          NAME=$(
+            /usr/libexec/PlistBuddy \
+            -c "Print Name" \
+            "$RUNNER_TEMP/profile.plist"
+          )
+
+          TEAM=$(
+            /usr/libexec/PlistBuddy \
+            -c "Print TeamIdentifier:0" \
+            "$RUNNER_TEMP/profile.plist"
+          )
+
+          APP_ID=$(
+            /usr/libexec/PlistBuddy \
+            -c "Print Entitlements:application-identifier" \
+            "$RUNNER_TEMP/profile.plist"
+          )
+
+          echo "Provisioning Profile:"
+          echo "Name: $NAME"
+          echo "UUID: $UUID"
+          echo "Team: $TEAM"
+          echo "Application Identifier: $APP_ID"
+
+          cp \
+            "$PROFILE_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+
+      - name: Prepare Flutter iOS project
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Configure Runner signing and disable Pods signing
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          # ============================================================
+          # RUNNER
+          # ============================================================
+
+          runner_path = Path("ios/Runner.xcodeproj/project.pbxproj")
+
+          if not runner_path.exists():
+              print("ERRORE: Runner.xcodeproj non trovato.")
+              raise SystemExit(1)
+
+          runner_text = runner_path.read_text()
+
+          # Trova il PBXNativeTarget di Runner.
+          native_target = re.search(
+              r'([A-F0-9]+) /\* Runner \*/ = \{\s*'
+              r'isa = PBXNativeTarget;.*?'
+              r'buildConfigurationList = ([A-F0-9]+).*?'
+              r'name = Runner;',
+              runner_text,
+              re.S
+          )
+
+          if not native_target:
+              print("ERRORE: target Runner non trovato.")
+              raise SystemExit(1)
+
+          config_list_id = native_target.group(2)
+
+          # Trova la PBXConfigurationList usata dal target Runner.
+          config_list = re.search(
+              rf'{config_list_id} /\* Build configuration list for PBXNativeTarget "Runner" \*/ = \{{'
+              r'.*?buildConfigurations = \((.*?)\);',
+              runner_text,
+              re.S
+          )
+
+          if not config_list:
+              print("ERRORE: configurazioni del target Runner non trovate.")
+              raise SystemExit(1)
+
+          config_ids = re.findall(
+              r'([A-F0-9]+) /\* (?:Debug|Release|Profile) \*/',
+              config_list.group(1)
+          )
+
+          if not config_ids:
+              print("ERRORE: ID configurazioni Runner non trovati.")
+              raise SystemExit(1)
+
+          # Modifica esclusivamente le configurazioni del target Runner.
+          for config_id in config_ids:
+              pattern = rf'({config_id} /\* (?:Debug|Release|Profile) \*/ = \{{.*?buildSettings = \{{)(.*?)(\n\s*\}};.*?\n\s*\}};)'
+
+              match = re.search(pattern, runner_text, re.S)
+
+              if not match:
+                  print(f"ATTENZIONE: configurazione {config_id} non modificata.")
+                  continue
+
+              settings = match.group(2)
+
+              def set_setting(settings, key, value):
+                  pattern = rf'^\s*{re.escape(key)}\s*=.*?;\s*$'
+                  replacement = f'\t\t\t\t{key} = {value};'
+
+                  if re.search(pattern, settings, re.M):
+                      return re.sub(pattern, replacement, settings, flags=re.M)
+
+                  return settings + "\n" + replacement
+
+              settings = set_setting(
+                  settings,
+                  "DEVELOPMENT_TEAM",
+                  "5DW4D2TY84"
+              )
+
+              settings = set_setting(
+                  settings,
+                  "CODE_SIGN_STYLE",
+                  "Manual"
+              )
+
+              settings = set_setting(
+                  settings,
+                  "CODE_SIGN_IDENTITY",
+                  '"Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)"'
+              )
+
+              settings = set_setting(
+                  settings,
+                  "PROVISIONING_PROFILE_SPECIFIER",
+                  '"DDX3X_AppStore_Profile"'
+              )
+
+              runner_text = (
+                  runner_text[:match.start(2)]
+                  + settings
+                  + runner_text[match.end(2):]
+              )
+
+          runner_path.write_text(runner_text)
+
+          print("Runner configurato:")
+          print("  DEVELOPMENT_TEAM = 5DW4D2TY84")
+          print("  CODE_SIGN_STYLE = Manual")
+          print("  CODE_SIGN_IDENTITY = Apple Distribution")
+          print("  PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile")
+
+          # ============================================================
+          # PODS
+          # ============================================================
+
+          pods_path = Path("ios/Pods/Pods.xcodeproj/project.pbxproj")
+
+          if not pods_path.exists():
+              print("ERRORE: Pods.xcodeproj non trovato.")
+              raise SystemExit(1)
+
+          pods_text = pods_path.read_text()
+
+          # I Pods non devono essere firmati con il provisioning
+          # profile dell'app Runner.
+          pods_text = re.sub(
+              r'^\s*PROVISIONING_PROFILE_SPECIFIER\s*=.*?;\s*$',
+              '\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "";',
+              pods_text,
+              flags=re.M
+          )
+
+          pods_text = re.sub(
+              r'^\s*CODE_SIGN_STYLE\s*=.*?;\s*$',
+              '\t\t\t\tCODE_SIGN_STYLE = Automatic;',
+              pods_text,
+              flags=re.M
+          )
+
+          pods_text = re.sub(
+              r'^\s*CODE_SIGNING_ALLOWED\s*=.*?;\s*$',
+              '\t\t\t\tCODE_SIGNING_ALLOWED = NO;',
+              pods_text,
+              flags=re.M
+          )
+
+          pods_text = re.sub(
+              r'^\s*CODE_SIGNING_REQUIRED\s*=.*?;\s*$',
+              '\t\t\t\tCODE_SIGNING_REQUIRED = NO;',
+              pods_text,
+              flags=re.M
+          )
+
+          # Se queste proprietà non esistono, vengono aggiunte alle
+          # configurazioni dei Pods.
+          def ensure_setting(text, key, value):
+              if re.search(
+                  rf'^\s*{re.escape(key)}\s*=',
+                  text,
+                  re.M
+              ):
+                  return text
+
+              return text.replace(
+                  "buildSettings = {",
+                  "buildSettings = {\n\t\t\t\t"
+                  f"{key} = {value};",
+                  1
+              )
+
+          pods_text = ensure_setting(
+              pods_text,
+              "CODE_SIGNING_ALLOWED",
+              "NO"
+          )
+
+          pods_text = ensure_setting(
+              pods_text,
+              "CODE_SIGNING_REQUIRED",
+              "NO"
+          )
+
+          pods_path.write_text(pods_text)
+
+          print("Pods configurati senza firma e senza provisioning profile.")
+          print("GoogleDataTransport e gli altri Pods non riceveranno il profilo dell'app.")
+
+      - name: Verify signing configuration
+        run: |
+          echo "===== RUNNER SIGNING ====="
+
+          grep -n \
+            -E "DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER" \
+            ios/Runner.xcodeproj/project.pbxproj \
+            || true
+
+          echo ""
+          echo "===== PODS SIGNING ====="
+
+          grep -n \
+            -E "CODE_SIGNING_ALLOWED|CODE_SIGNING_REQUIRED|CODE_SIGN_STYLE|PROVISIONING_PROFILE_SPECIFIER" \
+            ios/Pods/Pods.xcodeproj/project.pbxproj \
+            || true
+
+      - name: Build signed iOS archive
+        run: |
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
+            archive
+
+      - name: Create signed IPA
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+
+              <key>signingStyle</key>
+              <string>manual</string>
+
+              <key>teamID</key>
+              <string>5DW4D2TY84</string>
+
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.example.ddx3xControl</key>
+                  <string>DDX3X_AppStore_Profile</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+          cp \
+            "$RUNNER_TEMP/export/"*.ipa \
+            ddx3x_control.ipa
+
+      - name: Upload signed IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddx3x-control-ipa
+          path: ddx3x_control.ipa
