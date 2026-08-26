@@ -4,22 +4,15 @@
 <dict>
     <key>method</key>
     <string>app-store</string>
-
-    <key>teamID</key>
-    <string>5DW4D2TY84</string>
-
-    <key>signingStyle</key>
-    <string>manual</string>
-
-    <key>provisioningProfiles</key>
-    <dict>
-        <key>com.ddx3x.control</key>
-        <string>DDX3X_AppStore_Profile</string>
-    </dict>
-
     <key>compileBitcode</key>
     <false/>
-
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.example.ddx3xControl</key>
+        <string>DDX3XControlAppStoreProfile</string>
+    </dict>
     <key>destination</key>
     <string>export</string>
 </dict>
