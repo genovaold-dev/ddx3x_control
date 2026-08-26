@@ -31,13 +31,23 @@ jobs:
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
         run: |
-          echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/ddx3x_distribution.p12"
+          echo "$IOS_CERTIFICATE_BASE64" \
+            | sed '/-----BEGIN /d; /-----END /d' \
+            | tr -d '\r\n ' \
+            | base64 --decode > "$RUNNER_TEMP/ddx3x_distribution.p12"
+
+          test -s "$RUNNER_TEMP/ddx3x_distribution.p12"
 
       - name: Decode provisioning profile
         env:
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
-          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/ddx3x.mobileprovision"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" \
+            | sed '/-----BEGIN /d; /-----END /d' \
+            | tr -d '\r\n ' \
+            | base64 --decode > "$RUNNER_TEMP/ddx3x.mobileprovision"
+
+          test -s "$RUNNER_TEMP/ddx3x.mobileprovision"
 
       - name: Install signing certificate
         env:
@@ -86,32 +96,89 @@ jobs:
         run: |
           flutter build ios --release --no-codesign
 
-      - name: Configure Pods signing
+      - name: Configure Runner signing and Pods signing
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("ios/Pods/Pods.xcodeproj/project.pbxproj")
+          # ---------------------------------------------------------
+          # RUNNER:
+          # Impostiamo la firma manuale direttamente nel progetto
+          # Runner, così non dobbiamo passare il provisioning profile
+          # globalmente a xcodebuild.
+          # ---------------------------------------------------------
 
-          if not path.exists():
+          runner = Path("ios/Runner.xcodeproj/project.pbxproj")
+
+          if not runner.exists():
+              print("ERRORE: Runner.xcodeproj non trovato.")
+              raise SystemExit(1)
+
+          text = runner.read_text()
+
+          text = text.replace(
+              "CODE_SIGN_STYLE = Automatic;",
+              "CODE_SIGN_STYLE = Manual;"
+          )
+
+          text = text.replace(
+              "DEVELOPMENT_TEAM = \"\";",
+              "DEVELOPMENT_TEAM = 5DW4D2TY84;"
+          )
+
+          text = text.replace(
+              "DEVELOPMENT_TEAM = ;",
+              "DEVELOPMENT_TEAM = 5DW4D2TY84;"
+          )
+
+          text = text.replace(
+              "CODE_SIGN_IDENTITY = \"Apple Development\";",
+              "CODE_SIGN_IDENTITY = \"Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)\";"
+          )
+
+          text = text.replace(
+              "CODE_SIGN_IDENTITY = \"iPhone Developer\";",
+              "CODE_SIGN_IDENTITY = \"Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)\";"
+          )
+
+          # Inserisce il provisioning profile nel progetto Runner.
+          if "PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;" not in text:
+              text = text.replace(
+                  "PRODUCT_BUNDLE_IDENTIFIER = com.example.ddx3xControl;",
+                  "PRODUCT_BUNDLE_IDENTIFIER = com.example.ddx3xControl;\n"
+                  "\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;"
+              )
+
+          runner.write_text(text)
+
+          # ---------------------------------------------------------
+          # PODS:
+          # Nessun provisioning profile deve essere assegnato ai Pods.
+          # In particolare GoogleDataTransport non lo supporta.
+          # ---------------------------------------------------------
+
+          pods = Path("ios/Pods/Pods.xcodeproj/project.pbxproj")
+
+          if not pods.exists():
               print("ERRORE: Pods.xcodeproj non trovato.")
               raise SystemExit(1)
 
-          text = path.read_text()
+          pods_text = pods.read_text()
 
-          # I Pods non devono ricevere il provisioning profile dell'app.
-          text = text.replace(
+          pods_text = pods_text.replace(
               "PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;",
               "PROVISIONING_PROFILE_SPECIFIER = \"\";"
           )
 
-          text = text.replace(
+          pods_text = pods_text.replace(
               "PROVISIONING_PROFILE_SPECIFIER = \"DDX3X_AppStore_Profile\";",
               "PROVISIONING_PROFILE_SPECIFIER = \"\";"
           )
 
-          print("Configurazione Pods modificata: nessun provisioning profile per i Pods.")
-          path.write_text(text)
+          pods.write_text(pods_text)
+
+          print("Runner configurato per firma manuale.")
+          print("Pods configurati senza provisioning profile.")
           PY
 
       - name: Build signed iOS archive
@@ -121,10 +188,6 @@ jobs:
             -scheme Runner \
             -configuration Release \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM=5DW4D2TY84 \
-            CODE_SIGN_IDENTITY="Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)" \
-            PROVISIONING_PROFILE_SPECIFIER="DDX3X_AppStore_Profile" \
             archive
 
       - name: Create signed IPA
@@ -162,3 +225,4 @@ jobs:
         with:
           name: ddx3x-control-ipa
           path: ddx3x_control.ipa
+
