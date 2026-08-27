@@ -7,6 +7,11 @@ jobs:
   build-ios:
     runs-on: macos-latest
 
+    env:
+      IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,11 +25,11 @@ jobs:
         run: flutter pub get
 
       # ---------------------------------------------------
-      # DECODE P12 + DEBUG (QUI VEDIAMO SE È VUOTO O CORRETTO)
+      # DECODE P12 + DEBUG
       # ---------------------------------------------------
       - name: Decode certificate
         run: |
-          echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > ios_cert.p12
+          printf "%s" "$IOS_CERTIFICATE_BASE64" | base64 --decode --ignore-garbage > ios_cert.p12
 
           echo "DIMENSIONE P12:"
           ls -l ios_cert.p12
@@ -56,7 +61,7 @@ jobs:
       # ---------------------------------------------------
       - name: Decode provisioning profile
         run: |
-          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > profile.mobileprovision
+          printf "%s" "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode --ignore-garbage > profile.mobileprovision
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
