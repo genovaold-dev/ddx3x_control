@@ -19,18 +19,25 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # -------------------------------
-      # DECODE P12 PRIMA DI TUTTO
-      # -------------------------------
+      # ---------------------------------------------------
+      # DECODE P12 + DEBUG (QUI VEDIAMO SE È VUOTO O CORRETTO)
+      # ---------------------------------------------------
       - name: Decode certificate
         run: |
           echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > ios_cert.p12
+
+          echo "DIMENSIONE P12:"
           ls -l ios_cert.p12
+
+          echo "TIPO FILE:"
           file ios_cert.p12
 
-      # -------------------------------
+          echo "HEX (prime 64 bytes):"
+          xxd -l 64 ios_cert.p12 || echo "xxd non disponibile"
+
+      # ---------------------------------------------------
       # CREA E CONFIGURA LA KEYCHAIN
-      # -------------------------------
+      # ---------------------------------------------------
       - name: Create keychain
         run: |
           security create-keychain -p "github" build.keychain
@@ -44,25 +51,25 @@ jobs:
           echo "KEYCHAINS:"
           security list-keychains
 
-      # -------------------------------
+      # ---------------------------------------------------
       # IMPORTA PROVISIONING PROFILE
-      # -------------------------------
+      # ---------------------------------------------------
       - name: Decode provisioning profile
         run: |
           echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > profile.mobileprovision
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      # -------------------------------
+      # ---------------------------------------------------
       # COSTRUISCI ARCHIVIO iOS
-      # -------------------------------
+      # ---------------------------------------------------
       - name: Build iOS archive
         run: |
           flutter build ios --release --no-codesign
 
-      # -------------------------------
+      # ---------------------------------------------------
       # ESPORTA IPA FIRMATA
-      # -------------------------------
+      # ---------------------------------------------------
       - name: Export signed IPA
         run: |
           xcodebuild -exportArchive \
@@ -75,3 +82,4 @@ jobs:
         with:
           name: ddx3x-signed-ipa
           path: build/ios/ipa/*.ipa
+
