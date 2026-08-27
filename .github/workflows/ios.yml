@@ -20,31 +20,29 @@ jobs:
         run: flutter pub get
 
       # -------------------------------
-      # IMPORTA CERTIFICATO + KEYCHAIN
+      # DECODE P12 PRIMA DI TUTTO
       # -------------------------------
       - name: Decode certificate
         run: |
           echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > ios_cert.p12
+          ls -l ios_cert.p12
+          file ios_cert.p12
 
+      # -------------------------------
+      # CREA E CONFIGURA LA KEYCHAIN
+      # -------------------------------
       - name: Create keychain
         run: |
-          # CREA LA KEYCHAIN
           security create-keychain -p "github" build.keychain
-
-          # IMPOSTA COME DEFAULT
           security default-keychain -s build.keychain
-
-          # SBLOCCA LA KEYCHAIN
           security unlock-keychain -p "github" build.keychain
-
-          # IMPOSTA PERMESSI CORRETTI
           security set-keychain-settings -t 3600 -u build.keychain
 
-          # IMPORTA IL CERTIFICATO SOLO ORA
+          echo "IMPORTING P12..."
           security import ios_cert.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
 
-          # RENDE LA KEYCHAIN “TRUSTED”
-          security list-keychains -s build.keychain
+          echo "KEYCHAINS:"
+          security list-keychains
 
       # -------------------------------
       # IMPORTA PROVISIONING PROFILE
