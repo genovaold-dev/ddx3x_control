@@ -19,34 +19,51 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # -------------------------------
+      # IMPORTA CERTIFICATO + KEYCHAIN
+      # -------------------------------
       - name: Decode certificate
         run: |
-          echo "$IOS_CERTIFICATE_P12" | base64 --decode > certificate.p12
+          echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > ios_cert.p12
 
+      - name: Create keychain
+        run: |
+          security create-keychain -p "github" build.keychain
+          security import ios_cert.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "github" build.keychain
+          security set-keychain-settings build.keychain
+
+      # -------------------------------
+      # IMPORTA PROVISIONING PROFILE
+      # -------------------------------
       - name: Decode provisioning profile
         run: |
-          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > profile.mobileprovision
-
-      - name: Install certificate
-        run: |
-          security create-keychain -p "" build.keychain
-          security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychains -s build.keychain
-          security unlock-keychain -p "" build.keychain
-
-      - name: Install provisioning profile
-        run: |
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > profile.mobileprovision
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
+      # -------------------------------
+      # COSTRUISCI ARCHIVIO iOS
+      # -------------------------------
       - name: Build iOS archive
         run: |
-          flutter build ipa --release \
-            --export-options-plist=ios/ExportOptions.plist
+          flutter build ios --release --no-codesign
+
+      # -------------------------------
+      # ESPORTA IPA FIRMATA
+      # -------------------------------
+      - name: Export signed IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ExportOptions.plist
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ddx3x-control-signed-ipa
+          name: ddx3x-signed-ipa
           path: build/ios/ipa/*.ipa
 
