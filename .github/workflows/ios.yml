@@ -28,12 +28,23 @@ jobs:
 
       - name: Create keychain
         run: |
+          # CREA LA KEYCHAIN
           security create-keychain -p "github" build.keychain
-          security import ios_cert.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychains -s build.keychain
+
+          # IMPOSTA COME DEFAULT
           security default-keychain -s build.keychain
+
+          # SBLOCCA LA KEYCHAIN
           security unlock-keychain -p "github" build.keychain
-          security set-keychain-settings build.keychain
+
+          # IMPOSTA PERMESSI CORRETTI
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          # IMPORTA IL CERTIFICATO SOLO ORA
+          security import ios_cert.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+
+          # RENDE LA KEYCHAIN “TRUSTED”
+          security list-keychains -s build.keychain
 
       # -------------------------------
       # IMPORTA PROVISIONING PROFILE
@@ -66,4 +77,3 @@ jobs:
         with:
           name: ddx3x-signed-ipa
           path: build/ios/ipa/*.ipa
-
