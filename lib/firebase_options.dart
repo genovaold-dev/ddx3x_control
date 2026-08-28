@@ -65,4 +65,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'ddx3x-a9977.firebasestorage.app',
     iosBundleId: 'com.example.ddx3xControl',
   );
+
 }
