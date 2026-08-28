@@ -61,7 +61,7 @@ jobs:
       # ---------------------------------------------------
       - name: Decode provisioning profile
         run: |
-          printf "%s" "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode --ignore-garbage > profile.mobileprovision
+          printf "%s" "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -d > profile.mobileprovision
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
