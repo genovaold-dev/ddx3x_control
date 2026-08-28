@@ -25,6 +25,16 @@ jobs:
         run: flutter pub get
 
       # ---------------------------------------------------
+      # PREPARA iOS SENZA SPM (PASSO CRITICO)
+      # ---------------------------------------------------
+      - name: Prepare iOS without SPM
+        run: |
+          flutter clean
+          flutter pub get
+          flutter precache --ios
+          flutter build ios --no-codesign
+
+      # ---------------------------------------------------
       # DECODE P12 + DEBUG
       # ---------------------------------------------------
       - name: Decode certificate
@@ -66,13 +76,6 @@ jobs:
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
       # ---------------------------------------------------
-      # COSTRUISCI ARCHIVIO iOS
-      # ---------------------------------------------------
-      - name: Build iOS archive
-        run: |
-          flutter build ios --release --no-codesign
-
-      # ---------------------------------------------------
       # ESPORTA IPA FIRMATA
       # ---------------------------------------------------
       - name: Export signed IPA
@@ -87,4 +90,3 @@ jobs:
         with:
           name: ddx3x-signed-ipa
           path: build/ios/ipa/*.ipa
-
