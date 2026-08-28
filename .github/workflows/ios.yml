@@ -32,7 +32,7 @@ jobs:
           flutter clean
           flutter pub get
           flutter precache --ios
-          flutter build ios --no-codesign
+          flutter build ios --no-codesign --no-use-swiftpm
 
       # ---------------------------------------------------
       # DECODE P12 + DEBUG
