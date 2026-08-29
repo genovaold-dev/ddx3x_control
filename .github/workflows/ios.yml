@@ -54,7 +54,9 @@ jobs:
             "$KEYCHAIN_PATH"
 
           security list-keychain -d user -s "$KEYCHAIN_PATH"
-
+       
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+        
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           cp "$PP_PATH" \
             "$HOME/Library/MobileDevice/Provisioning Profiles/"
