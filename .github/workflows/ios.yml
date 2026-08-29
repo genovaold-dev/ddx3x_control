@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -80,25 +80,29 @@ jobs:
       - name: Prepare Flutter iOS build
         run: flutter build ios --release --no-codesign
 
-      name: Archive iOS app
+      - name: Create signing configuration
+        run: |
+          cat > "$RUNNER_TEMP/signing.xcconfig" <<'EOF'
+          CODE_SIGN_STYLE = Manual
+          CODE_SIGN_IDENTITY = Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)
+          DEVELOPMENT_TEAM = 5DW4D2TY84
+          PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile
+          PRODUCT_BUNDLE_IDENTIFIER = com.example.ddx3xControl
+          EOF
+
+      - name: Archive iOS app
         run: |
           set -e
-
-          cat > "$RUNNER_TEMP/RunnerSigning.xcconfig" <<'EOF'
-          CODE_SIGN_STYLE = Manual
-          DEVELOPMENT_TEAM = 5DW4D2TY84
-          CODE_SIGN_IDENTITY = Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)
-          PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile
-          EOF
 
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
+            -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
-            -xcconfig "$RUNNER_TEMP/RunnerSigning.xcconfig" \
+            -xcconfig "$RUNNER_TEMP/signing.xcconfig" \
             archive
-    
+
       - name: Export IPA
         run: |
           set -e
