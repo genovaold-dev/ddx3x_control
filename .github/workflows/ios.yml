@@ -92,7 +92,6 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=5DW4D2TY84 \
             CODE_SIGN_IDENTITY="Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)" \
-            PROVISIONING_PROFILE_SPECIFIER="DDX3X_AppStore_Profile" \
             archive
 
       - name: Export IPA
