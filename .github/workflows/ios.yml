@@ -80,20 +80,25 @@ jobs:
       - name: Prepare Flutter iOS build
         run: flutter build ios --release --no-codesign
 
-      - name: Archive iOS app
+      name: Archive iOS app
         run: |
           set -e
+
+          cat > "$RUNNER_TEMP/RunnerSigning.xcconfig" <<'EOF'
+          CODE_SIGN_STYLE = Manual
+          DEVELOPMENT_TEAM = 5DW4D2TY84
+          CODE_SIGN_IDENTITY = Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)
+          PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile
+          EOF
 
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM=5DW4D2TY84 \
-            CODE_SIGN_IDENTITY="Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)" \
+            -xcconfig "$RUNNER_TEMP/RunnerSigning.xcconfig" \
             archive
-
+    
       - name: Export IPA
         run: |
           set -e
