@@ -5,14 +5,17 @@
 <dict>
   <key>method</key>
   <string>app-store</string>
+
   <key>signingStyle</key>
   <string>manual</string>
+
+  <key>teamID</key>
+  <string>5DW4D2TY84</string>
+
   <key>provisioningProfiles</key>
   <dict>
-    <key>com.tuo.bundleid</key>
-    <string>NomeDelProvisioningProfile</string>
+    <key>com.example.ddx3xControl</key>
+    <string>DDX3X_AppStore_Profile</string>
   </dict>
-  <key>compileBitcode</key>
-  <true/>
 </dict>
 </plist>
