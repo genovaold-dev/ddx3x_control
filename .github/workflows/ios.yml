@@ -1,4 +1,4 @@
-name: Build Signed iOS IPA
+name: Build iOS IPA
 
 on:
   workflow_dispatch:
@@ -7,86 +7,64 @@ jobs:
   build-ios:
     runs-on: macos-latest
 
-    env:
-      IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
-      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.2'
           channel: stable
 
-      - name: Install dependencies
+      - name: Disable Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+
+      - name: Flutter pub get
         run: flutter pub get
 
-      # ---------------------------------------------------
-      # PREPARA iOS SENZA SPM (PASSO CRITICO)
-      # ---------------------------------------------------
-      - name: Prepare iOS without SPM
+      - name: Install the Apple certificate and provisioning profile
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
-          flutter clean
-          flutter pub get
-          flutter precache --ios
-          flutter build ios --no-codesign --no-use-swiftpm
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD="github-actions"
 
-      # ---------------------------------------------------
-      # DECODE P12 + DEBUG
-      # ---------------------------------------------------
-      - name: Decode certificate
-        run: |
-          printf "%s" "$IOS_CERTIFICATE_BASE64" | base64 -d > ios_cert.p12
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
 
-          echo "DIMENSIONE P12:"
-          ls -l ios_cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          echo "TIPO FILE:"
-          file ios_cert.p12
+          security import "$CERTIFICATE_PATH" \
+            -P "$P12_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
 
-          echo "HEX (prime 64 bytes):"
-          xxd -l 64 ios_cert.p12 || echo "xxd non disponibile"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
 
-      # ---------------------------------------------------
-      # CREA E CONFIGURA LA KEYCHAIN
-      # ---------------------------------------------------
-      - name: Create keychain
-        run: |
-          security create-keychain -p "github" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "github" build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
 
-          echo "IMPORTING P12..."
-          security import ios_cert.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PP_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
-          echo "KEYCHAINS:"
-          security list-keychains
-
-      # ---------------------------------------------------
-      # IMPORTA PROVISIONING PROFILE
-      # ---------------------------------------------------
-      - name: Decode provisioning profile
-        run: |
-          printf "%s" "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -d > profile.mobileprovision
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
-
-      # ---------------------------------------------------
-      # ESPORTA IPA FIRMATA
-      # ---------------------------------------------------
-      - name: Export signed IPA
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath build/ios/archive/Runner.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist ExportOptions.plist
+      - name: Build IPA
+        run: flutter build ipa --release
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ddx3x-signed-ipa
+          name: ddx3x-control-ipa
           path: build/ios/ipa/*.ipa
+      
