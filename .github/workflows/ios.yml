@@ -80,15 +80,77 @@ jobs:
       - name: Prepare Flutter iOS build
         run: flutter build ios --release --no-codesign
 
-      - name: Create signing configuration
+      - name: Configure Runner Release signing
         run: |
-          cat > "$RUNNER_TEMP/signing.xcconfig" <<'EOF'
-          CODE_SIGN_STYLE = Manual
-          CODE_SIGN_IDENTITY = Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)
-          DEVELOPMENT_TEAM = 5DW4D2TY84
-          PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile
-          PRODUCT_BUNDLE_IDENTIFIER = com.example.ddx3xControl
-          EOF
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("ios/Runner.xcodeproj/project.pbxproj")
+          text = path.read_text()
+
+          config_id = "97C147071CF9000F007C117D /* Release */ = {"
+
+          start = text.find(config_id)
+          if start == -1:
+              raise SystemExit("Runner Release configuration not found")
+
+          settings_marker = "\n\t\t\tbuildSettings = {\n"
+          settings_start = text.find(settings_marker, start)
+
+          if settings_start == -1:
+              raise SystemExit("Runner Release buildSettings not found")
+
+          signing = (
+              '\t\t\t\tCODE_SIGN_STYLE = Manual;\n'
+              '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)";\n'
+              '\t\t\t\tDEVELOPMENT_TEAM = 5DW4D2TY84;\n'
+              '\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;\n'
+          )
+
+          insert_at = settings_start + len(settings_marker)
+
+          text = text[:insert_at] + signing + text[insert_at:]
+
+          path.write_text(text)
+
+          print("Runner Release signing configured successfully.")
+          PY
+
+      - name: Verify Runner Release signing
+        run: |
+          echo "=== RUNNER RELEASE SIGNING ==="
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          text = Path("ios/Runner.xcodeproj/project.pbxproj").read_text()
+
+          config_id = "97C147071CF9000F007C117D /* Release */ = {"
+          start = text.find(config_id)
+
+          if start == -1:
+              raise SystemExit("Runner Release configuration not found")
+
+          end = text.find("\n\t\t};", start)
+
+          if end == -1:
+              raise SystemExit("Runner Release configuration end not found")
+
+          block = text[start:end]
+
+          required = [
+              "CODE_SIGN_STYLE = Manual;",
+              'CODE_SIGN_IDENTITY = "Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)";',
+              "DEVELOPMENT_TEAM = 5DW4D2TY84;",
+              "PROVISIONING_PROFILE_SPECIFIER = DDX3X_AppStore_Profile;",
+          ]
+
+          for item in required:
+              if item not in block:
+                  raise SystemExit(f"Missing Runner signing setting: {item}")
+
+          print("Runner Release signing settings are present.")
+          PY
 
       - name: Archive iOS app
         run: |
@@ -100,7 +162,6 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
-            -xcconfig "$RUNNER_TEMP/signing.xcconfig" \
             archive
 
       - name: Export IPA
