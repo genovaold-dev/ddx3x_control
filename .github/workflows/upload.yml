@@ -11,6 +11,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
+      - name: Remove ANY existing .p8 files
+        run: |
+          find . -name "*.p8" -type f -delete
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -21,20 +25,20 @@ jobs:
 
       - name: Decode API key
         run: |
-          echo "${{ secrets.APPSTORE_PRIVATE_KEY_BASE64 }}" | base64 --decode > AuthKey_6B92U7J5PV.p8
+          echo "${{ secrets.APPSTORE_PRIVATE_KEY_BASE64 }}" | base64 --decode > private_key.p8
 
       - name: Create API key JSON
         run: |
-          KEY_CONTENT=$(sed ':a;N;$!ba;s/\n/\\n/g' AuthKey_6B92U7J5PV.p8)
+          KEY_CONTENT=$(sed ':a;N;$!ba;s/\n/\\n/g' private_key.p8)
           echo "{
             \"key_id\": \"${{ secrets.APPSTORE_KEY_ID }}\",
             \"issuer_id\": \"${{ secrets.APPSTORE_ISSUER_ID }}\",
             \"key\": \"$KEY_CONTENT\"
           }" > api_key.json
 
-      - name: Remove raw .p8 file so Fastlane cannot auto-load it
+      - name: Remove raw .p8 so Fastlane cannot auto-load it
         run: |
-          rm AuthKey_6B92U7J5PV.p8
+          rm private_key.p8
 
       - name: Upload IPA to TestFlight
         run: |
