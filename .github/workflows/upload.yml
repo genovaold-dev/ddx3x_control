@@ -21,18 +21,20 @@ jobs:
 
       - name: Decode API key
         run: |
-          echo "${{ secrets.APPSTORE_PRIVATE_KEY_BASE64 }}" | base64 --decode > AuthKey.p8
+          echo "${{ secrets.APPSTORE_PRIVATE_KEY_BASE64 }}" | base64 --decode > AuthKey_6B92U7J5PV.p8
 
       - name: Create API key JSON
         run: |
+          KEY_CONTENT=$(sed ':a;N;$!ba;s/\n/\\n/g' AuthKey_6B92U7J5PV.p8)
           echo "{
             \"key_id\": \"${{ secrets.APPSTORE_KEY_ID }}\",
             \"issuer_id\": \"${{ secrets.APPSTORE_ISSUER_ID }}\",
-            \"key\": \"$(sed ':a;N;$!ba;s/\n/\\n/g' AuthKey.p8)\"
+            \"key\": \"$KEY_CONTENT\"
           }" > api_key.json
 
       - name: Upload IPA to TestFlight
         run: |
           fastlane pilot upload \
             --ipa artifacts/ddx3x_control.ipa \
-            --api_key_path api_key.json
+            --api_key_path api_key.json \
+            --verbose
