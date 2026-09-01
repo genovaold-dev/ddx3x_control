@@ -1,7 +1,7 @@
 name: Upload to TestFlight
 
 on:
-  workflow_dispatch: # PARTE SOLO QUANDO LO LANCIA BRUNO
+  workflow_dispatch:   # PARTE SOLO QUANDO LO LANCIA BRUNO
 
 jobs:
   upload:
@@ -30,6 +30,6 @@ jobs:
         run: |
           fastlane pilot upload \
             --ipa artifacts/ddx3x_control.ipa \
-            --api_key_path AuthKey.p8 \
-            --api_key_id "$APPSTORE_KEY_ID" \
-            --api_key_issuer_id "$APPSTORE_ISSUER_ID"
+            --api-key-file AuthKey.p8 \
+            --api-key "$APPSTORE_KEY_ID" \
+            --api-issuer-id "$APPSTORE_ISSUER_ID"
