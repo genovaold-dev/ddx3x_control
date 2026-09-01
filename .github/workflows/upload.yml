@@ -32,6 +32,10 @@ jobs:
             \"key\": \"$KEY_CONTENT\"
           }" > api_key.json
 
+      - name: Remove raw .p8 file so Fastlane cannot auto-load it
+        run: |
+          rm AuthKey_6B92U7J5PV.p8
+
       - name: Upload IPA to TestFlight
         run: |
           fastlane pilot upload \
