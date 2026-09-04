@@ -350,11 +350,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             _installationDate!,
           ),
         )
-            .orderBy(
-          'createdAt',
-          descending: true,
-        )
-            .snapshots(),
+        .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState ==
               ConnectionState.waiting) {
