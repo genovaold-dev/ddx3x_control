@@ -123,10 +123,7 @@ class HomePage extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const Scaffold(
-                      appBar: AppBar(title: Text('Notifiche')),
-                      body: Center(child: Text('TEST NOTIFICHE')),
-                     ),
+                      builder: (_) => const NotificationsPage(),
                     ),
                   );
                 },
