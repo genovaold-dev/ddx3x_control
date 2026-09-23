@@ -69,11 +69,70 @@ jobs:
 
           chmod 600 "$RUNNER_TEMP/AuthKey.p8"
 
-          echo "App Store Connect API key installed."
-
       - name: Prepare Flutter iOS build
+        run: flutter build ios --release --no-codesign
+
+      - name: Configure Runner automatic distribution signing
         run: |
-          flutter build ios --release --no-codesign
+          set -e
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("ios/Runner.xcodeproj/project.pbxproj")
+          text = path.read_text()
+
+          config_id = "97C147071CF9000F007C117D /* Release */ = {"
+
+          start = text.find(config_id)
+          if start == -1:
+              raise SystemExit("Runner Release configuration not found")
+
+          settings_marker = "\n\t\t\tbuildSettings = {\n"
+          settings_start = text.find(settings_marker, start)
+
+          if settings_start == -1:
+              raise SystemExit("Runner Release buildSettings not found")
+
+          settings_end = text.find("\n\t\t\t};", settings_start)
+
+          if settings_end == -1:
+              raise SystemExit("Runner Release buildSettings end not found")
+
+          block = text[settings_start:settings_end]
+
+          lines = block.splitlines(True)
+
+          filtered = []
+          for line in lines:
+              if "CODE_SIGN_STYLE =" in line:
+                  continue
+              if "CODE_SIGN_IDENTITY =" in line:
+                  continue
+              if "PROVISIONING_PROFILE_SPECIFIER =" in line:
+                  continue
+              if "DEVELOPMENT_TEAM =" in line:
+                  continue
+              filtered.append(line)
+
+          signing = (
+              "\t\t\t\tCODE_SIGN_STYLE = Automatic;\n"
+              '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)";\n'
+              "\t\t\t\tDEVELOPMENT_TEAM = 5DW4D2TY84;\n"
+          )
+
+          new_block = "".join(filtered) + signing
+
+          text = (
+              text[:settings_start]
+              + new_block
+              + text[settings_end:]
+          )
+
+          path.write_text(text)
+
+          print("Runner Release automatic distribution signing configured.")
+          PY
 
       - name: Archive iOS app
         env:
@@ -88,8 +147,6 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM=5DW4D2TY84 \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
             -authenticationKeyID "$APPSTORE_KEY_ID" \
