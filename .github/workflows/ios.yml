@@ -117,7 +117,6 @@ jobs:
 
           signing = (
               "\t\t\t\tCODE_SIGN_STYLE = Automatic;\n"
-              '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)";\n'
               "\t\t\t\tDEVELOPMENT_TEAM = 5DW4D2TY84;\n"
           )
 
@@ -131,7 +130,7 @@ jobs:
 
           path.write_text(text)
 
-          print("Runner Release automatic distribution signing configured.")
+          print("Runner Release automatic signing configured.")
           PY
 
       - name: Archive iOS app
