@@ -74,9 +74,6 @@ jobs:
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
 
-          cp "$PROFILE_PATH" \
-            "$HOME/Library/MobileDevice/Provisioning Profiles/"
-
           PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
 
           security cms \
@@ -101,6 +98,9 @@ jobs:
               -c "Print :Entitlements:application-identifier" \
               "$PROFILE_PLIST"
           )
+
+          cp "$PROFILE_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 
           echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
           echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
@@ -132,34 +132,51 @@ jobs:
       - name: Prepare Flutter iOS build
         run: flutter build ios --release --no-codesign
 
-      - name: Configure manual App Store signing
+      - name: Configure Runner manual App Store signing
         run: |
           set -e
 
           python3 <<'PY'
           from pathlib import Path
+          import os
 
           path = Path("ios/Runner.xcodeproj/project.pbxproj")
           text = path.read_text()
 
+          profile_uuid = os.environ["PROFILE_UUID"]
+
           config_id = "97C147071CF9000F007C117D /* Release */ = {"
 
           start = text.find(config_id)
+
           if start == -1:
               raise SystemExit("Runner Release configuration not found")
 
           settings_marker = "\n\t\t\tbuildSettings = {\n"
-          settings_start = text.find(settings_marker, start)
+
+          settings_start = text.find(
+              settings_marker,
+              start
+          )
 
           if settings_start == -1:
-              raise SystemExit("Runner Release buildSettings not found")
+              raise SystemExit(
+                  "Runner Release buildSettings not found"
+              )
 
-          settings_end = text.find("\n\t\t\t};", settings_start)
+          settings_end = text.find(
+              "\n\t\t\t};",
+              settings_start
+          )
 
           if settings_end == -1:
-              raise SystemExit("Runner Release buildSettings end not found")
+              raise SystemExit(
+                  "Runner Release buildSettings end not found"
+              )
 
-          block = text[settings_start:settings_end]
+          block = text[
+              settings_start:settings_end
+          ]
 
           lines = block.splitlines(True)
 
@@ -168,19 +185,23 @@ jobs:
           for line in lines:
               if "CODE_SIGN_STYLE =" in line:
                   continue
+
               if "CODE_SIGN_IDENTITY =" in line:
                   continue
+
               if "PROVISIONING_PROFILE_SPECIFIER =" in line:
                   continue
+
               if "DEVELOPMENT_TEAM =" in line:
                   continue
+
               filtered.append(line)
 
           signing = (
               "\t\t\t\tCODE_SIGN_STYLE = Manual;\n"
               '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)";\n'
               "\t\t\t\tDEVELOPMENT_TEAM = 5DW4D2TY84;\n"
-              '\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "$(DDX3X_PROFILE_UUID)";\n'
+              f'\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile_uuid}";\n'
           )
 
           new_block = "".join(filtered) + signing
@@ -193,23 +214,12 @@ jobs:
 
           path.write_text(text)
 
-          print("Manual App Store signing configured.")
-          PY
-
-          python3 <<'PY'
-          from pathlib import Path
-
-          path = Path("ios/Runner.xcodeproj/project.pbxproj")
-          text = path.read_text()
-
-          text = text.replace(
-              'PROVISIONING_PROFILE_SPECIFIER = "$(DDX3X_PROFILE_UUID)";',
-              'PROVISIONING_PROFILE_SPECIFIER = "$(PROFILE_UUID)";'
+          print("=== RUNNER SIGNING ===")
+          print("CODE_SIGN_STYLE = Manual")
+          print("DEVELOPMENT_TEAM = 5DW4D2TY84")
+          print(
+              f"PROVISIONING_PROFILE_SPECIFIER = {profile_uuid}"
           )
-
-          path.write_text(text)
-
-          print("Provisioning profile variable configured.")
           PY
 
       - name: Archive iOS app
