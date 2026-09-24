@@ -232,11 +232,7 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/DDX3X.xcarchive" \
-            DEVELOPMENT_TEAM=5DW4D2TY84 \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution: Associazione DDX3X ODV (5DW4D2TY84)" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
-            archive
+             archive
 
       - name: Create ExportOptions.plist
         run: |
