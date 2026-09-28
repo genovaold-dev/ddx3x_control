@@ -350,10 +350,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             _installationDate!,
           ),
         )
-        .snapshots()
-        .timeout(
-          const Duration(seconds: 10),
-        ),
+        .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState ==
               ConnectionState.waiting) {

@@ -217,9 +217,13 @@ Future<void> _initializeServices() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(const Ddx3xApp());
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
-  await _initializeServices();
+  runApp(const Ddx3xApp());
+ 
+ await _initializeServices();
 }
 
 class Ddx3xApp extends StatelessWidget {
