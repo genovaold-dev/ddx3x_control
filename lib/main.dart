@@ -17,7 +17,7 @@ const AndroidNotificationChannel notificationChannel =
     AndroidNotificationChannel(
   'ddx3x_notifications',
   'DDX3X Notifiche',
-  description: 'Notifiche dellÔÇÖapp DDX3X',
+  description: 'Notifiche dell’app DDX3X',
   importance: Importance.max,
   playSound: true,
 );
@@ -65,6 +65,10 @@ Future<void> _openNotificationLink(RemoteMessage message) async {
 
 Future<void> _initializeServices() async {
   try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
     const androidInitializationSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -173,7 +177,7 @@ Future<void> _initializeServices() async {
             android: AndroidNotificationDetails(
               'ddx3x_notifications',
               'DDX3X Notifiche',
-              channelDescription: 'Notifiche dellÔÇÖapp DDX3X',
+              channelDescription: 'Notifiche dell’app DDX3X',
               importance: Importance.max,
               priority: Priority.high,
               playSound: true,
@@ -186,7 +190,7 @@ Future<void> _initializeServices() async {
 
     FirebaseMessaging.onMessageOpenedApp.listen(
       (RemoteMessage message) {
-        print('DDX3X - Notifica aperta dallÔÇÖutente');
+        print('DDX3X - Notifica aperta dall’utente');
         print('Dati: ${message.data}');
 
         _openNotificationLink(message);
@@ -213,13 +217,9 @@ Future<void> _initializeServices() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  runApp(const Ddx3xApp());
 
   await _initializeServices();
-
-  runApp(const Ddx3xApp());
 }
 
 class Ddx3xApp extends StatelessWidget {
